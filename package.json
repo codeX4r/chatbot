@@ -1,0 +1,25 @@
+{
+  "name": "chatbot",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/codeX4r/chatbot.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "module",
+  "bugs": {
+    "url": "https://github.com/codeX4r/chatbot/issues"
+  },
+  "homepage": "https://github.com/codeX4r/chatbot#readme",
+  "dependencies": {
+    "express": "^5.3.0",
+    "ollama": "^0.6.4"
+  }
+}
