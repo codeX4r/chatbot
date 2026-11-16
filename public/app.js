@@ -1,10 +1,14 @@
+
 const chatbox = document.getElementById('chatbox');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 
 const STORAGE_KEY = 'llama_chat_history';
+const SESSION_KEY = 'chatSessionId';
+
 let isSending = false;
+let sessionId = sessionStorage.getItem(SESSION_KEY);
 
 const WELCOME_HTML = `
   <div id="welcome" class="m-auto text-center max-w-sm px-4">
@@ -32,47 +36,90 @@ const WELCOME_HTML = `
   </div>
 `;
 
+// Initialize a server-side chat session
+async function initializeSession() {
+  if (sessionId) return;
+
+  const response = await fetch('/api/sessions', {
+    method: 'POST'
+  });
+
+  if (!response.ok) {
+    throw new Error('Unable to initialize chat session');
+  }
+
+  const data = await response.json();
+
+  if (!data.sessionId) {
+    throw new Error('Server did not return a session ID');
+  }
+
+  sessionId = data.sessionId;
+  sessionStorage.setItem(SESSION_KEY, sessionId);
+}
+
 // Parse Markdown safely
 function parseMarkdown(text) {
   if (window.marked && window.DOMPurify) {
     return DOMPurify.sanitize(marked.parse(text));
   }
+
   const div = document.createElement('div');
   div.textContent = text;
   return div.innerHTML.replace(/\n/g, '<br>');
 }
 
-// Add "Copy" button to every <pre> code block
+// Add Copy buttons to code blocks
 function attachCopyButtons(container) {
   container.querySelectorAll('pre').forEach((pre) => {
     if (pre.querySelector('.copy-btn')) return;
+
     const btn = document.createElement('button');
-    btn.className = 'copy-btn absolute top-2.5 right-2.5 bg-zinc-700/80 hover:bg-zinc-600 text-zinc-200 text-[11px] px-2 py-1 rounded-md transition cursor-pointer';
+
+    btn.className =
+      'copy-btn absolute top-2.5 right-2.5 bg-zinc-700/80 hover:bg-zinc-600 text-zinc-200 text-[11px] px-2 py-1 rounded-md transition cursor-pointer';
+
     btn.textContent = 'Copy';
-    btn.addEventListener('click', () => {
+
+    btn.addEventListener('click', async () => {
       const code = pre.querySelector('code')?.innerText || pre.innerText;
-      navigator.clipboard.writeText(code);
-      btn.textContent = 'Copied!';
-      setTimeout(() => (btn.textContent = 'Copy'), 1500);
+
+      try {
+        await navigator.clipboard.writeText(code);
+        btn.textContent = 'Copied!';
+        setTimeout(() => (btn.textContent = 'Copy'), 1500);
+      } catch {
+        btn.textContent = 'Copy failed';
+        setTimeout(() => (btn.textContent = 'Copy'), 1500);
+      }
     });
+
     pre.appendChild(btn);
   });
 }
 
-// Build a user or assistant message bubble
+// Create user or assistant message
 function createMessageElement(role, content) {
   if (role === 'user') {
     const wrapper = document.createElement('div');
     wrapper.className = 'flex justify-end';
+
     const bubble = document.createElement('div');
-    bubble.className = 'max-w-[82%] bg-zinc-900 text-white text-sm px-4 py-3 rounded-2xl rounded-br-sm whitespace-pre-wrap break-words leading-relaxed shadow-xs';
+
+    bubble.className =
+      'max-w-[82%] bg-zinc-900 text-white text-sm px-4 py-3 rounded-2xl rounded-br-sm whitespace-pre-wrap break-words leading-relaxed shadow-xs';
+
     bubble.textContent = content;
+
     wrapper.appendChild(bubble);
+
     return wrapper;
   }
 
   const wrapper = document.createElement('div');
+
   wrapper.className = 'flex items-start gap-3 max-w-[92%]';
+
   wrapper.innerHTML = `
     <div class="w-7 h-7 rounded-lg bg-zinc-100 border border-zinc-200/80 text-zinc-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
       ✦
@@ -81,53 +128,73 @@ function createMessageElement(role, content) {
       ${parseMarkdown(content)}
     </div>
   `;
+
   attachCopyButtons(wrapper);
+
   return wrapper;
 }
 
-// Persist messages in localStorage (last 60 messages)
+// Persist last 60 messages
 function saveToStorage(role, content) {
-  const history = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  history.push({ role, content });
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(history.slice(-60)));
+  try {
+    const history = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) || '[]'
+    );
+
+    history.push({ role, content });
+
+    localStorage.setItem(
+      STORAGE_KEY,
+      JSON.stringify(history.slice(-60))
+    );
+  } catch (error) {
+    console.error('Unable to save chat history:', error);
+  }
 }
 
-// Restore saved messages on page refresh
+// Restore messages after refresh
 function restoreHistory() {
-  const history = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
-  if (history.length === 0) return;
+  try {
+    const history = JSON.parse(
+      localStorage.getItem(STORAGE_KEY) || '[]'
+    );
 
-  const fragment = document.createDocumentFragment();
-  history.forEach((msg) => {
-    fragment.appendChild(createMessageElement(msg.role, msg.content));
-  });
+    if (!Array.isArray(history) || history.length === 0) return;
 
-  document.getElementById('welcome')?.remove();
-  chatbox.appendChild(fragment);
-  chatbox.scrollTop = chatbox.scrollHeight;
+    const fragment = document.createDocumentFragment();
+
+    history.forEach((msg) => {
+      if (
+        !msg ||
+        !['user', 'assistant'].includes(msg.role) ||
+        typeof msg.content !== 'string'
+      ) {
+        return;
+      }
+
+      fragment.appendChild(
+        createMessageElement(msg.role, msg.content)
+      );
+    });
+
+    document.getElementById('welcome')?.remove();
+
+    chatbox.appendChild(fragment);
+
+    chatbox.scrollTop = chatbox.scrollHeight;
+  } catch (error) {
+    console.error('Unable to restore chat history:', error);
+    localStorage.removeItem(STORAGE_KEY);
+  }
 }
 
-// Send user message to backend
-async function sendMessage() {
-  const text = input.value.trim();
-  if (!text || isSending) return;
+// Create typing indicator
+function createTypingIndicator() {
+  const wrapper = document.createElement('div');
 
-  isSending = true;
-  sendBtn.disabled = true;
-  document.getElementById('welcome')?.remove();
+  wrapper.className = 'flex items-start gap-3 max-w-[92%]';
 
-  // 1. Render and save user message
-  chatbox.appendChild(createMessageElement('user', text));
-  saveToStorage('user', text);
-
-  input.value = '';
-  input.style.height = 'auto';
-  chatbox.scrollTop = chatbox.scrollHeight;
-
-  // 2. Show typing indicator
-  const botWrapper = document.createElement('div');
-  botWrapper.className = 'flex items-start gap-3 max-w-[92%]';
-  botWrapper.innerHTML = `
+  wrapper.innerHTML = `
     <div class="w-7 h-7 rounded-lg bg-zinc-100 border border-zinc-200/80 text-zinc-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
       ✦
     </div>
@@ -139,66 +206,170 @@ async function sendMessage() {
       </div>
     </div>
   `;
+
+  return wrapper;
+}
+
+// Send message to backend
+async function sendMessage() {
+  const text = input.value.trim();
+
+  if (!text || isSending) return;
+
+  isSending = true;
+  sendBtn.disabled = true;
+
+  document.getElementById('welcome')?.remove();
+
+  const userMessage = createMessageElement('user', text);
+
+  chatbox.appendChild(userMessage);
+
+  saveToStorage('user', text);
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  chatbox.scrollTop = chatbox.scrollHeight;
+
+  const botWrapper = createTypingIndicator();
+
   chatbox.appendChild(botWrapper);
+
   chatbox.scrollTop = chatbox.scrollHeight;
 
   try {
+    // Ensure a session exists
+    await initializeSession();
+
+    // Send message to the new backend
     const res = await fetch('/chat', {
       method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ message: text })
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({
+        message: text,
+        sessionId: sessionId
+      })
     });
-    const data = await res.json();
-    const reply = data.reply || data.error || 'No response received.';
 
-    // 3. Render Markdown, attach copy buttons, and save
+    const data = await res.json();
+
+    if (!res.ok) {
+      throw new Error(data.error || 'Request failed');
+    }
+
+    const reply = data.reply;
+
+    if (typeof reply !== 'string') {
+      throw new Error('Invalid response from server');
+    }
+
+    // Render assistant response
     const contentDiv = botWrapper.querySelector('.markdown-body');
+
     contentDiv.innerHTML = parseMarkdown(reply);
+
     attachCopyButtons(botWrapper);
+
     saveToStorage('assistant', reply);
-  } catch (err) {
-    botWrapper.querySelector('.markdown-body').innerHTML =
-      '<p class="text-red-500">Error connecting to server. Make sure <code>node server.js</code> is running.</p>';
+
+  } catch (error) {
+    console.error('Chat error:', error);
+
+    const contentDiv = botWrapper.querySelector('.markdown-body');
+
+    contentDiv.innerHTML = '';
+
+    const errorMessage = document.createElement('p');
+
+    errorMessage.className = 'text-red-500';
+    errorMessage.textContent = error.message || 'Unable to connect to the server.';
+
+    contentDiv.appendChild(errorMessage);
+
   } finally {
     isSending = false;
     sendBtn.disabled = false;
+
     chatbox.scrollTop = chatbox.scrollHeight;
+
     input.focus();
   }
 }
 
-// Clear chat history from browser and server
+// Start a new chat
 async function clearChat() {
-  localStorage.removeItem(STORAGE_KEY);
-  try {
-    await fetch('/reset', { method: 'POST' });
-  } catch (e) {}
+  if (isSending) return;
 
-  chatbox.innerHTML = WELCOME_HTML;
+  clearBtn.disabled = true;
+
+  try {
+    if (sessionId) {
+      const response = await fetch(
+        `/api/sessions/${encodeURIComponent(sessionId)}`,
+        {
+          method: 'DELETE'
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error('Unable to clear server session');
+      }
+    }
+
+    // Clear browser-side data
+    localStorage.removeItem(STORAGE_KEY);
+
+    sessionStorage.removeItem(SESSION_KEY);
+
+    sessionId = null;
+
+    // Reset UI
+    chatbox.innerHTML = WELCOME_HTML;
+
+  } catch (error) {
+    console.error('Clear chat error:', error);
+    alert('Unable to start a new chat. Please try again.');
+
+  } finally {
+    clearBtn.disabled = false;
+  }
 }
 
-// Event Listeners
+// Event listeners
 sendBtn.addEventListener('click', sendMessage);
+
 clearBtn.addEventListener('click', clearChat);
 
-chatbox.addEventListener('click', (e) => {
-  const btn = e.target.closest('.starter-btn');
-  if (btn) {
-    input.value = btn.dataset.prompt;
-    sendMessage();
-  }
+// Starter prompts
+chatbox.addEventListener('click', (event) => {
+  const btn = event.target.closest('.starter-btn');
+
+  if (!btn) return;
+
+  input.value = btn.dataset.prompt;
+
+  sendMessage();
 });
 
+// Auto-resize textarea
 input.addEventListener('input', () => {
   input.style.height = 'auto';
-  input.style.height = Math.min(input.scrollHeight, 128) + 'px';
+
+  input.style.height =
+    Math.min(input.scrollHeight, 128) + 'px';
 });
 
-input.addEventListener('keydown', (e) => {
-  if (e.key === 'Enter' && !e.shiftKey) {
-    e.preventDefault();
+// Enter to send, Shift + Enter for newline
+input.addEventListener('keydown', (event) => {
+  if (event.key === 'Enter' && !event.shiftKey) {
+    event.preventDefault();
+
     sendMessage();
   }
 });
 
+// Restore chat history when page loads
 window.addEventListener('DOMContentLoaded', restoreHistory);
