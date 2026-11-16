@@ -10,31 +10,74 @@ const SESSION_KEY = 'chatSessionId';
 let isSending = false;
 let sessionId = sessionStorage.getItem(SESSION_KEY);
 
+
 const WELCOME_HTML = `
-  <div id="welcome" class="m-auto text-center max-w-sm px-4">
-    <div class="w-12 h-12 rounded-2xl bg-zinc-100 text-zinc-800 flex items-center justify-center text-xl mx-auto mb-4">
-      ✦
+  <div id="welcome" class="welcome-panel m-auto w-full max-w-2xl text-center">
+
+    <div class="welcome-emblem mx-auto mb-5">
+      <span>✦</span>
     </div>
-    <h2 class="text-xl font-semibold tracking-tight text-zinc-900 mb-2">How can I help today?</h2>
-    <p class="text-xs text-zinc-500 leading-relaxed mb-6">
-      Running locally with zero external API keys. Ask a question, write code, or brainstorm ideas.
+
+    <p class="eyebrow mb-3">NAMASTE & WELCOME</p>
+
+    <h2 class="welcome-title mb-3">
+      What are you craving <span>today?</span>
+    </h2>
+
+    <p class="text-sm sm:text-base text-stone-500 leading-relaxed max-w-lg mx-auto">
+      From traditional Indian sweets to delicious snacks and meals,
+      let us help you find your next favourite.
     </p>
-    <div class="flex flex-wrap justify-center gap-2">
-      <button
-        data-prompt="Explain how Transformers work simply"
-        class="starter-btn text-xs text-zinc-600 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/80 px-3 py-1.5 rounded-full transition cursor-pointer"
-      >
-        Explain Transformers
-      </button>
-      <button
-        data-prompt="Write a clean Express.js REST API example"
-        class="starter-btn text-xs text-zinc-600 bg-zinc-50 hover:bg-zinc-100 border border-zinc-200/80 px-3 py-1.5 rounded-full transition cursor-pointer"
-      >
-        Express API snippet
+
+    <div class="mt-9 text-left">
+      <p class="text-xs font-semibold tracking-widest text-stone-400 uppercase mb-3">
+        Explore by category
+      </p>
+
+      <div class="grid grid-cols-2 sm:grid-cols-4 gap-3">
+
+        <button class="category-card starter-btn"
+          data-prompt="Show me some traditional Indian sweets.">
+          <span class="category-icon">🍬</span>
+          <span class="category-name">Sweets</span>
+          <span class="category-description">Traditional delights</span>
+        </button>
+
+        <button class="category-card starter-btn"
+          data-prompt="Suggest some tasty Indian snacks.">
+          <span class="category-icon">🥨</span>
+          <span class="category-name">Snacks</span>
+          <span class="category-description">Quick bites</span>
+        </button>
+
+        <button class="category-card starter-btn"
+          data-prompt="I want to explore some Indian chaat.">
+          <span class="category-icon">🥣</span>
+          <span class="category-name">Chaat</span>
+          <span class="category-description">Tangy favourites</span>
+        </button>
+
+        <button class="category-card starter-btn"
+          data-prompt="Recommend a satisfying Indian meal.">
+          <span class="category-icon">🍛</span>
+          <span class="category-name">Meals</span>
+          <span class="category-description">Hearty choices</span>
+        </button>
+
+      </div>
+    </div>
+
+    <div class="suggestion-strip mt-7">
+      <span class="text-xs text-stone-500">Not sure what to choose?</span>
+      <button class="starter-btn suggestion-link"
+        data-prompt="Recommend something delicious based on my taste.">
+        Recommend something for me <span>→</span>
       </button>
     </div>
+
   </div>
 `;
+
 
 // Initialize a server-side chat session
 async function initializeSession() {
@@ -99,40 +142,26 @@ function attachCopyButtons(container) {
 }
 
 // Create user or assistant message
-function createMessageElement(role, content) {
-  if (role === 'user') {
-    const wrapper = document.createElement('div');
-    wrapper.className = 'flex justify-end';
 
-    const bubble = document.createElement('div');
 
-    bubble.className =
-      'max-w-[82%] bg-zinc-900 text-white text-sm px-4 py-3 rounded-2xl rounded-br-sm whitespace-pre-wrap break-words leading-relaxed shadow-xs';
+const wrapper = document.createElement('div');
+wrapper.className = 'flex items-start gap-3 max-w-[95%]';
 
-    bubble.textContent = content;
+const avatar = document.createElement('div');
+avatar.className = 'assistant-avatar';
+avatar.textContent = 'B';
 
-    wrapper.appendChild(bubble);
+const message = document.createElement('div');
+message.className = 'assistant-message markdown-body flex-1';
+message.innerHTML = parseMarkdown(content);
 
-    return wrapper;
-  }
+wrapper.appendChild(avatar);
+wrapper.appendChild(message);
 
-  const wrapper = document.createElement('div');
+attachCopyButtons(wrapper);
 
-  wrapper.className = 'flex items-start gap-3 max-w-[92%]';
+return wrapper;
 
-  wrapper.innerHTML = `
-    <div class="w-7 h-7 rounded-lg bg-zinc-100 border border-zinc-200/80 text-zinc-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
-      ✦
-    </div>
-    <div class="markdown-body text-sm text-zinc-800 leading-relaxed break-words flex-1 min-w-0">
-      ${parseMarkdown(content)}
-    </div>
-  `;
-
-  attachCopyButtons(wrapper);
-
-  return wrapper;
-}
 
 // Persist last 60 messages
 function saveToStorage(role, content) {
@@ -189,20 +218,22 @@ function restoreHistory() {
 }
 
 // Create typing indicator
+
 function createTypingIndicator() {
   const wrapper = document.createElement('div');
-
-  wrapper.className = 'flex items-start gap-3 max-w-[92%]';
+  wrapper.className = 'flex items-start gap-3 max-w-[95%]';
 
   wrapper.innerHTML = `
-    <div class="w-7 h-7 rounded-lg bg-zinc-100 border border-zinc-200/80 text-zinc-700 flex items-center justify-center text-xs shrink-0 mt-0.5">
-      ✦
-    </div>
-    <div class="markdown-body text-sm text-zinc-800 leading-relaxed break-words flex-1 min-w-0 py-1.5">
-      <div class="flex items-center gap-1.5">
-        <span class="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce"></span>
-        <span class="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce [animation-delay:0.15s]"></span>
-        <span class="w-1.5 h-1.5 bg-zinc-400 rounded-full animate-bounce [animation-delay:0.3s]"></span>
+    <div class="assistant-avatar">B</div>
+
+    <div class="assistant-message py-2">
+      <div class="flex items-center gap-2 text-xs text-stone-400">
+        <span>Finding something delicious</span>
+        <span class="flex gap-1">
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce [animation-delay:0.15s]"></span>
+          <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce [animation-delay:0.3s]"></span>
+        </span>
       </div>
     </div>
   `;
