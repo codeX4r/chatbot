@@ -1,56 +1,555 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8">
-  <title>Keyless Open-Source Chatbot</title>
-  <style>
-    body { font-family: sans-serif; max-width: 600px; margin: 40px auto; padding: 0 20px; }
-    #chatbox { border: 1px solid #ccc; height: 400px; overflow-y: auto; padding: 15px; margin-bottom: 10px; border-radius: 8px; }
-    .msg { margin-bottom: 12px; line-height: 1.4; }
-    .user { color: #0056b3; font-weight: bold; }
-    .bot { color: #222; }
-    #controls { display: flex; gap: 10px; }
-    input { flex: 1; padding: 10px; font-size: 16px; }
-    button { padding: 10px 20px; font-size: 16px; cursor: pointer; }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Llama AI Chat</title>
+
+<!-- Markdown and sanitization -->
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/dompurify@3.2.6/dist/purify.min.js"></script>
+
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+<style>
+:root {
+  --bg: #f7f8fa;
+  --surface: #ffffff;
+  --text: #202124;
+  --muted: #8b9099;
+  --border: #e9eaed;
+  --accent: #635bff;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+body {
+  font-family: 'Inter', sans-serif;
+  background: var(--bg);
+  color: var(--text);
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* Main layout */
+.app {
+  max-width: 1000px;
+  height: 100vh;
+  margin: auto;
+  display: flex;
+  flex-direction: column;
+  background: var(--surface);
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+}
+
+/* Header */
+.header {
+  height: 75px;
+  padding: 0 30px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid var(--border);
+}
+
+.brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.logo {
+  width: 38px;
+  height: 38px;
+  border-radius: 12px;
+  background: linear-gradient(135deg, #766dff, #5146df);
+  color: white;
+  display: grid;
+  place-items: center;
+  font-size: 19px;
+  font-weight: 700;
+}
+
+.brand h2 {
+  font-size: 16px;
+  font-weight: 600;
+}
+
+.brand p {
+  font-size: 11px;
+  color: var(--muted);
+  margin-top: 3px;
+}
+
+.status {
+  font-size: 12px;
+  color: #269c68;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.status::before {
+  content: '';
+  width: 7px;
+  height: 7px;
+  background: #28b779;
+  border-radius: 50%;
+}
+
+/* Chat area */
+#chatbox {
+  flex: 1;
+  overflow-y: auto;
+  padding: 35px 50px;
+  display: flex;
+  flex-direction: column;
+  gap: 25px;
+  scroll-behavior: smooth;
+}
+
+.welcome {
+  margin: auto;
+  text-align: center;
+  max-width: 420px;
+}
+
+.welcome-icon {
+  width: 60px;
+  height: 60px;
+  border-radius: 20px;
+  background: #f0efff;
+  color: var(--accent);
+  display: grid;
+  place-items: center;
+  font-size: 28px;
+  margin: 0 auto 20px;
+}
+
+.welcome h1 {
+  font-size: 25px;
+  font-weight: 600;
+  letter-spacing: -1px;
+  margin-bottom: 10px;
+}
+
+.welcome p {
+  font-size: 13px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+/* Messages */
+.msg {
+  max-width: 85%;
+  line-height: 1.7;
+  font-size: 14px;
+  animation: appear .25s ease;
+}
+
+@keyframes appear {
+  from {
+    opacity: 0;
+    transform: translateY(8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.user {
+  align-self: flex-end;
+  background: #f0efff;
+  color: #39328e;
+  padding: 13px 18px;
+  border-radius: 18px 18px 4px 18px;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.bot {
+  align-self: flex-start;
+  width: 100%;
+  max-width: 90%;
+}
+
+.bot-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--accent);
+  margin-bottom: 8px;
+  display: block;
+}
+
+.bot-content {
+  line-height: 1.8;
+  overflow-wrap: anywhere;
+}
+
+.bot-content p {
+  margin-bottom: 12px;
+}
+
+.bot-content ul,
+.bot-content ol {
+  padding-left: 22px;
+  margin: 10px 0;
+}
+
+.bot-content li {
+  margin-bottom: 6px;
+}
+
+.bot-content h1,
+.bot-content h2,
+.bot-content h3 {
+  margin: 18px 0 10px;
+  font-size: 17px;
+}
+
+.bot-content code {
+  background: #f1f2f5;
+  padding: 3px 6px;
+  border-radius: 5px;
+  font-family: monospace;
+}
+
+.bot-content pre {
+  background: #1e1e2e;
+  color: #e5e5ed;
+  padding: 17px;
+  border-radius: 12px;
+  overflow-x: auto;
+  margin: 12px 0;
+}
+
+.bot-content pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.bot-content blockquote {
+  border-left: 3px solid var(--accent);
+  padding-left: 14px;
+  color: #777;
+  margin: 12px 0;
+}
+
+.bot-content a {
+  color: var(--accent);
+}
+
+.bot-content table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 12px 0;
+}
+
+.bot-content th,
+.bot-content td {
+  padding: 9px;
+  border: 1px solid var(--border);
+  text-align: left;
+}
+
+/* Typing indicator */
+.typing {
+  display: flex;
+  gap: 5px;
+  padding: 12px 0;
+}
+
+.typing span {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #aaa;
+  animation: bounce .8s infinite alternate;
+}
+
+.typing span:nth-child(2) {
+  animation-delay: .2s;
+}
+
+.typing span:nth-child(3) {
+  animation-delay: .4s;
+}
+
+@keyframes bounce {
+  to { transform: translateY(-5px); opacity: .4; }
+}
+
+/* Input section */
+.input-section {
+  padding: 18px 35px 24px;
+  border-top: 1px solid var(--border);
+}
+
+.input-wrapper {
+  max-width: 750px;
+  margin: auto;
+  background: #fff;
+  border: 1px solid #e2e3e8;
+  border-radius: 16px;
+  padding: 8px 10px 8px 18px;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  transition: .2s;
+  box-shadow: 0 3px 15px rgba(0,0,0,.025);
+}
+
+.input-wrapper:focus-within {
+  border-color: #aaa4ff;
+  box-shadow: 0 0 0 3px rgba(99,91,255,.08);
+}
+
+textarea {
+  flex: 1;
+  border: none;
+  outline: none;
+  resize: none;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 9px 0;
+  min-height: 38px;
+  max-height: 120px;
+  background: transparent;
+  color: var(--text);
+}
+
+textarea::placeholder {
+  color: #a3a5ad;
+}
+
+.send-btn {
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: 12px;
+  background: var(--accent);
+  color: white;
+  cursor: pointer;
+  font-size: 18px;
+  transition: .2s;
+  flex-shrink: 0;
+}
+
+.send-btn:hover {
+  background: #5148df;
+  transform: translateY(-1px);
+}
+
+.send-btn:disabled {
+  opacity: .5;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.footer-text {
+  text-align: center;
+  font-size: 10px;
+  color: #a0a2aa;
+  margin-top: 12px;
+}
+
+/* Scrollbar */
+#chatbox::-webkit-scrollbar {
+  width: 5px;
+}
+
+#chatbox::-webkit-scrollbar-thumb {
+  background: #ddd;
+  border-radius: 10px;
+}
+
+/* Mobile */
+@media(max-width: 600px) {
+  .app {
+    border: none;
+  }
+
+  .header {
+    padding: 0 18px;
+    height: 65px;
+  }
+
+  #chatbox {
+    padding: 25px 18px;
+  }
+
+  .msg {
+    max-width: 95%;
+  }
+
+  .bot {
+    max-width: 100%;
+  }
+
+  .input-section {
+    padding: 14px 14px 20px;
+  }
+
+  .welcome h1 {
+    font-size: 22px;
+  }
+}
+</style>
 </head>
+
 <body>
-  <h2>Local Llama 3.2 Chatbot (No API Key)</h2>
-  <div id="chatbox"></div>
-  <div id="controls">
-    <input type="text" id="input" placeholder="Type a message..." />
-    <button onclick="sendMessage()">Send</button>
-  </div>
 
-  <script>
-    const chatbox = document.getElementById('chatbox');
-    const input = document.getElementById('input');
+<div class="app">
 
-    async function sendMessage() {
-      const text = input.value.trim();
-      if (!text) return;
+  <!-- Header -->
+  <header class="header">
+    <div class="brand">
+      <div class="logo">L</div>
+      <div>
+        <h2>Llama AI</h2>
+        <p>Local AI Assistant · 3.2</p>
+      </div>
+    </div>
+    <div class="status">Online</div>
+  </header>
 
-      chatbox.innerHTML += `<div class="msg user">You: ${text}</div>`;
-      input.value = '';
-      chatbox.scrollTop = chatbox.scrollHeight;
+  <!-- Chat -->
+  <main id="chatbox">
 
-      const loadingId = 'loading-' + Date.now();
-      chatbox.innerHTML += `<div class="msg bot" id="${loadingId}"><em>Thinking...</em></div>`;
+    <div class="welcome" id="welcome">
+      <div class="welcome-icon">✦</div>
+      <h1>How can I help you?</h1>
+      <p>
+        Your personal AI assistant is ready.
+        Ask anything, explore ideas, or get things done.
+      </p>
+    </div>
 
-      const res = await fetch('/chat', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ message: text })
-      });
-      const data = await res.json();
+  </main>
 
-      document.getElementById(loadingId).innerHTML = `<strong>Bot:</strong> ${data.reply || data.error}`;
-      chatbox.scrollTop = chatbox.scrollHeight;
+  <!-- Input -->
+  <section class="input-section">
+    <div class="input-wrapper">
+      <textarea
+        id="input"
+        placeholder="Message Llama..."
+        rows="1"
+      ></textarea>
+
+      <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+        ↑
+      </button>
+    </div>
+
+    <p class="footer-text">
+      Powered by Llama 3.2 · Your conversations run locally
+    </p>
+  </section>
+
+</div>
+
+<script>
+const chatbox = document.getElementById('chatbox');
+const input = document.getElementById('input');
+const sendBtn = document.getElementById('sendBtn');
+const welcome = document.getElementById('welcome');
+
+let isSending = false;
+
+async function sendMessage() {
+  const text = input.value.trim();
+
+  if (!text || isSending) return;
+
+  isSending = true;
+  sendBtn.disabled = true;
+
+  welcome?.remove();
+
+  // User message
+  const userDiv = document.createElement('div');
+  userDiv.className = 'msg user';
+  userDiv.textContent = text;
+  chatbox.appendChild(userDiv);
+
+  input.value = '';
+  input.style.height = 'auto';
+
+  // Bot response container
+  const botDiv = document.createElement('div');
+  botDiv.className = 'msg bot';
+
+  botDiv.innerHTML = `
+    <span class="bot-label">✦ Llama AI</span>
+    <div class="bot-content">
+      <div class="typing">
+        <span></span><span></span><span></span>
+      </div>
+    </div>
+  `;
+
+  chatbox.appendChild(botDiv);
+  chatbox.scrollTop = chatbox.scrollHeight;
+
+  try {
+    const res = await fetch('/chat', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ message: text })
+    });
+
+    if (!res.ok) {
+      throw new Error('Server error: ' + res.status);
     }
 
-    input.addEventListener('keypress', (e) => {
-      if (e.key === 'Enter') sendMessage();
-    });
-  </script>
+    const data = await res.json();
+    const reply = data.reply || data.error || 'No response received.';
+
+    const formattedHtml = DOMPurify.sanitize(
+      marked.parse(reply)
+    );
+
+    botDiv.querySelector('.bot-content').innerHTML = formattedHtml;
+
+  } catch (error) {
+    botDiv.querySelector('.bot-content').textContent =
+      'Something went wrong. Please check your server and try again.';
+    console.error(error);
+
+  } finally {
+    isSending = false;
+    sendBtn.disabled = false;
+    input.focus();
+    chatbox.scrollTop = chatbox.scrollHeight;
+  }
+}
+
+// Enter to send, Shift + Enter for new line
+input.addEventListener('keydown', (e) => {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+});
+
+// Auto resize textarea
+input.addEventListener('input', () => {
+  input.style.height = 'auto';
+  input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+});
+</script>
+
 </body>
 </html>
