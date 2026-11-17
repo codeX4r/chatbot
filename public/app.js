@@ -1,15 +1,25 @@
 
+/* ==========================================
+   BIKANERVALA FOODBOT — FRONTEND
+========================================== */
+
+// DOM elements
 const chatbox = document.getElementById('chatbox');
 const input = document.getElementById('input');
 const sendBtn = document.getElementById('sendBtn');
 const clearBtn = document.getElementById('clearBtn');
 
+// Storage keys
 const STORAGE_KEY = 'llama_chat_history';
 const SESSION_KEY = 'chatSessionId';
 
 let isSending = false;
 let sessionId = sessionStorage.getItem(SESSION_KEY);
 
+
+/* ==========================================
+   WELCOME SCREEN
+========================================== */
 
 const WELCOME_HTML = `
   <div id="welcome" class="welcome-panel m-auto w-full max-w-2xl text-center">
@@ -29,7 +39,8 @@ const WELCOME_HTML = `
       let us help you find your next favourite.
     </p>
 
-    <div class="mt-9 text-left">
+    <div class="mt-8 text-left">
+
       <p class="text-xs font-semibold tracking-widest text-stone-400 uppercase mb-3">
         Explore by category
       </p>
@@ -67,8 +78,11 @@ const WELCOME_HTML = `
       </div>
     </div>
 
-    <div class="suggestion-strip mt-7">
-      <span class="text-xs text-stone-500">Not sure what to choose?</span>
+    <div class="suggestion-strip mt-6">
+      <span class="text-xs text-stone-500">
+        Not sure what to choose?
+      </span>
+
       <button class="starter-btn suggestion-link"
         data-prompt="Recommend something delicious based on my taste.">
         Recommend something for me <span>→</span>
@@ -79,43 +93,68 @@ const WELCOME_HTML = `
 `;
 
 
-// Initialize a server-side chat session
-async function initializeSession() {
-  if (sessionId) return;
+/* ==========================================
+   SESSION MANAGEMENT
+========================================== */
+
+async function initializeSession(forceNew = false) {
+
+  if (sessionId && !forceNew) {
+    return;
+  }
 
   const response = await fetch('/api/sessions', {
     method: 'POST'
   });
 
   if (!response.ok) {
-    throw new Error('Unable to initialize chat session');
+    throw new Error('Unable to initialize chat session.');
   }
 
   const data = await response.json();
 
   if (!data.sessionId) {
-    throw new Error('Server did not return a session ID');
+    throw new Error('Server did not return a session ID.');
   }
 
   sessionId = data.sessionId;
+
   sessionStorage.setItem(SESSION_KEY, sessionId);
 }
 
-// Parse Markdown safely
+
+/* ==========================================
+   MARKDOWN RENDERING
+========================================== */
+
 function parseMarkdown(text) {
+
   if (window.marked && window.DOMPurify) {
-    return DOMPurify.sanitize(marked.parse(text));
+
+    const html = window.marked.parse(text);
+
+    return window.DOMPurify.sanitize(html);
   }
 
   const div = document.createElement('div');
+
   div.textContent = text;
+
   return div.innerHTML.replace(/\n/g, '<br>');
 }
 
-// Add Copy buttons to code blocks
+
+/* ==========================================
+   CODE COPY BUTTONS
+========================================== */
+
 function attachCopyButtons(container) {
+
   container.querySelectorAll('pre').forEach((pre) => {
-    if (pre.querySelector('.copy-btn')) return;
+
+    if (pre.querySelector('.copy-btn')) {
+      return;
+    }
 
     const btn = document.createElement('button');
 
@@ -125,74 +164,138 @@ function attachCopyButtons(container) {
     btn.textContent = 'Copy';
 
     btn.addEventListener('click', async () => {
-      const code = pre.querySelector('code')?.innerText || pre.innerText;
+
+      const code =
+        pre.querySelector('code')?.innerText || pre.innerText;
 
       try {
+
         await navigator.clipboard.writeText(code);
+
         btn.textContent = 'Copied!';
-        setTimeout(() => (btn.textContent = 'Copy'), 1500);
-      } catch {
+
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+        }, 1500);
+
+      } catch (error) {
+
+        console.error('Copy failed:', error);
+
         btn.textContent = 'Copy failed';
-        setTimeout(() => (btn.textContent = 'Copy'), 1500);
+
+        setTimeout(() => {
+          btn.textContent = 'Copy';
+        }, 1500);
       }
     });
 
     pre.appendChild(btn);
+
   });
 }
 
-// Create user or assistant message
+
+/* ==========================================
+   MESSAGE CREATION
+========================================== */
+
+function createMessageElement(role, content) {
+
+  // User message
+  if (role === 'user') {
+
+    const wrapper = document.createElement('div');
+
+    wrapper.className = 'flex justify-end';
+
+    const bubble = document.createElement('div');
+
+    bubble.className = 'user-message';
+
+    bubble.textContent = content;
+
+    wrapper.appendChild(bubble);
+
+    return wrapper;
+  }
+
+  // Assistant message
+  const wrapper = document.createElement('div');
+
+  wrapper.className = 'flex items-start gap-3 max-w-[95%]';
+
+  const avatar = document.createElement('div');
+
+  avatar.className = 'assistant-avatar';
+
+  avatar.textContent = 'B';
+
+  const message = document.createElement('div');
+
+  message.className = 'assistant-message markdown-body flex-1';
+
+  message.innerHTML = parseMarkdown(content);
+
+  wrapper.appendChild(avatar);
+
+  wrapper.appendChild(message);
+
+  attachCopyButtons(wrapper);
+
+  return wrapper;
+}
 
 
-const wrapper = document.createElement('div');
-wrapper.className = 'flex items-start gap-3 max-w-[95%]';
+/* ==========================================
+   CHAT HISTORY STORAGE
+========================================== */
 
-const avatar = document.createElement('div');
-avatar.className = 'assistant-avatar';
-avatar.textContent = 'B';
-
-const message = document.createElement('div');
-message.className = 'assistant-message markdown-body flex-1';
-message.innerHTML = parseMarkdown(content);
-
-wrapper.appendChild(avatar);
-wrapper.appendChild(message);
-
-attachCopyButtons(wrapper);
-
-return wrapper;
-
-
-// Persist last 60 messages
 function saveToStorage(role, content) {
+
   try {
+
     const history = JSON.parse(
       localStorage.getItem(STORAGE_KEY) || '[]'
     );
 
-    history.push({ role, content });
+    history.push({
+      role,
+      content
+    });
 
     localStorage.setItem(
       STORAGE_KEY,
       JSON.stringify(history.slice(-60))
     );
+
   } catch (error) {
+
     console.error('Unable to save chat history:', error);
   }
 }
 
-// Restore messages after refresh
+
+/* ==========================================
+   RESTORE CHAT HISTORY
+========================================== */
+
 function restoreHistory() {
+
   try {
+
     const history = JSON.parse(
       localStorage.getItem(STORAGE_KEY) || '[]'
     );
 
-    if (!Array.isArray(history) || history.length === 0) return;
+    if (!Array.isArray(history) || history.length === 0) {
+      return;
+    }
 
     const fragment = document.createDocumentFragment();
 
     history.forEach((msg) => {
+
       if (
         !msg ||
         !['user', 'assistant'].includes(msg.role) ||
@@ -204,6 +307,7 @@ function restoreHistory() {
       fragment.appendChild(
         createMessageElement(msg.role, msg.content)
       );
+
     });
 
     document.getElementById('welcome')?.remove();
@@ -211,47 +315,73 @@ function restoreHistory() {
     chatbox.appendChild(fragment);
 
     chatbox.scrollTop = chatbox.scrollHeight;
+
   } catch (error) {
+
     console.error('Unable to restore chat history:', error);
+
     localStorage.removeItem(STORAGE_KEY);
   }
 }
 
-// Create typing indicator
+
+/* ==========================================
+   TYPING INDICATOR
+========================================== */
 
 function createTypingIndicator() {
+
   const wrapper = document.createElement('div');
+
   wrapper.className = 'flex items-start gap-3 max-w-[95%]';
 
   wrapper.innerHTML = `
     <div class="assistant-avatar">B</div>
 
-    <div class="assistant-message py-2">
+    <div class="assistant-message markdown-body py-2">
+
       <div class="flex items-center gap-2 text-xs text-stone-400">
+
         <span>Finding something delicious</span>
+
         <span class="flex gap-1">
+
           <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce"></span>
+
           <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce [animation-delay:0.15s]"></span>
+
           <span class="w-1.5 h-1.5 rounded-full bg-amber-600 animate-bounce [animation-delay:0.3s]"></span>
+
         </span>
+
       </div>
+
     </div>
   `;
 
   return wrapper;
 }
 
-// Send message to backend
+
+/* ==========================================
+   SEND MESSAGE
+========================================== */
+
 async function sendMessage() {
+
   const text = input.value.trim();
 
-  if (!text || isSending) return;
+  if (!text || isSending) {
+    return;
+  }
 
   isSending = true;
+
   sendBtn.disabled = true;
 
   document.getElementById('welcome')?.remove();
 
+  // Display user message
   const userMessage = createMessageElement('user', text);
 
   chatbox.appendChild(userMessage);
@@ -259,10 +389,12 @@ async function sendMessage() {
   saveToStorage('user', text);
 
   input.value = '';
+
   input.style.height = 'auto';
 
   chatbox.scrollTop = chatbox.scrollHeight;
 
+  // Display typing indicator
   const botWrapper = createTypingIndicator();
 
   chatbox.appendChild(botWrapper);
@@ -270,58 +402,77 @@ async function sendMessage() {
   chatbox.scrollTop = chatbox.scrollHeight;
 
   try {
-    // Ensure a session exists
+
     await initializeSession();
 
-    // Send message to the new backend
-    const res = await fetch('/chat', {
+    const requestBody = {
+      message: text,
+      sessionId
+    };
+
+    let res = await fetch('/chat', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        message: text,
-        sessionId: sessionId
-      })
+      body: JSON.stringify(requestBody)
     });
+
+    // Recover once if the server-side session has expired
+    if (res.status === 404) {
+
+      sessionStorage.removeItem(SESSION_KEY);
+
+      sessionId = null;
+
+      await initializeSession(true);
+
+      res = await fetch('/chat', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          message: text,
+          sessionId
+        })
+      });
+    }
 
     const data = await res.json();
 
     if (!res.ok) {
-      throw new Error(data.error || 'Request failed');
+      throw new Error(data.error || 'Request failed.');
     }
 
-    const reply = data.reply;
-
-    if (typeof reply !== 'string') {
-      throw new Error('Invalid response from server');
+    if (typeof data.reply !== 'string') {
+      throw new Error('Invalid response from server.');
     }
 
     // Render assistant response
     const contentDiv = botWrapper.querySelector('.markdown-body');
 
-    contentDiv.innerHTML = parseMarkdown(reply);
+    contentDiv.innerHTML = parseMarkdown(data.reply);
 
     attachCopyButtons(botWrapper);
 
-    saveToStorage('assistant', reply);
+    saveToStorage('assistant', data.reply);
 
   } catch (error) {
+
     console.error('Chat error:', error);
 
     const contentDiv = botWrapper.querySelector('.markdown-body');
 
-    contentDiv.innerHTML = '';
+    contentDiv.textContent =
+      error.message || 'Unable to connect to the server.';
 
-    const errorMessage = document.createElement('p');
-
-    errorMessage.className = 'text-red-500';
-    errorMessage.textContent = error.message || 'Unable to connect to the server.';
-
-    contentDiv.appendChild(errorMessage);
+    contentDiv.classList.add('text-red-600');
 
   } finally {
+
     isSending = false;
+
     sendBtn.disabled = false;
 
     chatbox.scrollTop = chatbox.scrollHeight;
@@ -330,14 +481,23 @@ async function sendMessage() {
   }
 }
 
-// Start a new chat
+
+/* ==========================================
+   NEW CHAT
+========================================== */
+
 async function clearChat() {
-  if (isSending) return;
+
+  if (isSending) {
+    return;
+  }
 
   clearBtn.disabled = true;
 
   try {
+
     if (sessionId) {
+
       const response = await fetch(
         `/api/sessions/${encodeURIComponent(sessionId)}`,
         {
@@ -345,62 +505,81 @@ async function clearChat() {
         }
       );
 
-      if (!response.ok) {
-        throw new Error('Unable to clear server session');
+      if (!response.ok && response.status !== 404) {
+        throw new Error('Unable to clear server session.');
       }
     }
 
-    // Clear browser-side data
+    // Clear browser storage
     localStorage.removeItem(STORAGE_KEY);
 
     sessionStorage.removeItem(SESSION_KEY);
 
     sessionId = null;
 
-    // Reset UI
+    // Restore welcome screen
     chatbox.innerHTML = WELCOME_HTML;
 
   } catch (error) {
+
     console.error('Clear chat error:', error);
+
     alert('Unable to start a new chat. Please try again.');
 
   } finally {
+
     clearBtn.disabled = false;
   }
 }
 
-// Event listeners
+
+/* ==========================================
+   EVENT LISTENERS
+========================================== */
+
+// Send button
 sendBtn.addEventListener('click', sendMessage);
 
+// New chat button
 clearBtn.addEventListener('click', clearChat);
+
 
 // Starter prompts
 chatbox.addEventListener('click', (event) => {
+
   const btn = event.target.closest('.starter-btn');
 
-  if (!btn) return;
+  if (!btn || isSending) {
+    return;
+  }
 
-  input.value = btn.dataset.prompt;
+  input.value = btn.dataset.prompt || '';
 
   sendMessage();
 });
 
+
 // Auto-resize textarea
 input.addEventListener('input', () => {
+
   input.style.height = 'auto';
 
   input.style.height =
     Math.min(input.scrollHeight, 128) + 'px';
 });
 
+
 // Enter to send, Shift + Enter for newline
 input.addEventListener('keydown', (event) => {
+
   if (event.key === 'Enter' && !event.shiftKey) {
+
     event.preventDefault();
 
     sendMessage();
   }
 });
 
-// Restore chat history when page loads
-window.addEventListener('DOMContentLoaded', restoreHistory);
+
+// Restore history on page load
+restoreHistory();
